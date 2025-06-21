@@ -1,0 +1,54 @@
+# ===================================================================
+# Expo 프로젝트를 위한 표준 .gitignore
+# ===================================================================
+
+# 의존성 (Dependencies)
+# 이 폴더는 'npm install' 명령어로 언제든지 다시 생성할 수 있습니다.
+# 용량이 매우 크므로 절대 Git에 포함하지 않습니다.
+node_modules/
+
+# Expo 자동 생성 파일 (Expo auto-generated files)
+# 개발 서버를 실행할 때마다 각자의 PC 환경에 맞게 자동으로 생성되는 임시 파일들입니다.
+# 다른 팀원과 공유할 필요가 없습니다.
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# 네이티브 빌드 관련 파일 (Native Build Artifacts)
+# 안드로이드/iOS 네이티브 빌드 과정에서 생성되는 파일들입니다.
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# 메트로 번들러 캐시 (Metro Bundler Cache)
+.metro-health-check*
+
+# 디버그 로그 파일 (Debug Logs)
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# 운영체제 자동 생성 파일 (OS-specific files)
+# macOS의 Finder가 자동으로 생성하는 파일입니다.
+.DS_Store
+# SSL 인증서 등
+*.pem
+
+# 로컬 환경 변수 파일 (Local Environment Files)
+# API 키와 같이 민감한 정보를 담고 있으므로 절대 공유해서는 안 됩니다.
+.env
+.env*.local
+
+# 타입스크립트 빌드 정보 (TypeScript Build Info)
+# 타입스크립트 컴파일 과정에서 생성되는 캐시 파일입니다.
+*.tsbuildinfo
+
+# 예시 파일 또는 테스트용 디렉토리 (Example files or directories)
+# 프로젝트에 따라 필요 없으면 이 줄은 삭제해도 됩니다.
+app-example
+
