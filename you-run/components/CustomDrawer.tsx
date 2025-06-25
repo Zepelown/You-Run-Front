@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter, Href } from 'expo-router'; // Href를 import 합니다.
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+
 interface CustomDrawerProps {
     closeMenu: () => void;
 }
@@ -35,8 +36,12 @@ export default function CustomDrawer({ closeMenu }: CustomDrawerProps) {
                 <Pressable style={styles.menuItem} onPress={() => navigateTo('/(drawer)/running')}>
                     <Text style={styles.menuText}>Running</Text>
                 </Pressable>
-            
-
+                <Pressable style={styles.menuItem} onPress={() => navigateTo('/(drawer)/3d-test')}>
+                    <Text style={styles.menuText}>3d-Test</Text>
+                </Pressable>
+                <Pressable style={styles.menuItem} onPress={() => navigateTo('/(drawer)/map-draw-test')}>
+                    <Text style={styles.menuText}>map-draw-Test</Text>
+                </Pressable>                
                 <Pressable style={[styles.menuItem, styles.closeButton]} onPress={closeMenu}>
                     <Text style={styles.menuText}>닫기</Text>
                 </Pressable>

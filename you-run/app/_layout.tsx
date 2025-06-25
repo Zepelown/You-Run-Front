@@ -48,6 +48,7 @@ function RootLayoutNav() {
     <>
       {/* screenOptions를 사용하여 모든 스크린의 헤더를 숨깁니다. */}
       <Stack screenOptions={{ headerShown: false }}>
+        
       </Stack>
       {isMenuVisible && <CustomDrawer closeMenu={closeMenu} />}
     </>
