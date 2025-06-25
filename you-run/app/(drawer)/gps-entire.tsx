@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 export default function GpsScreen() {
   // 1. 상태 변수 선언
@@ -55,7 +55,8 @@ export default function GpsScreen() {
           <Text style={styles.dataText}>위도 (Latitude): {location.coords.latitude.toFixed(6)}</Text>
           <Text style={styles.dataText}>경도 (Longitude): {location.coords.longitude.toFixed(6)}</Text>
           <Text style={styles.dataText}>고도 (Altitude): {location.coords.altitude?.toFixed(2) ?? 'N/A'} m</Text>
-          <Text style={styles.dataText}>속도 (Speed): {location.coords.speed?.toFixed(2) ?? 'N/A'} m/s</Text>
+          {/* <Text style={styles.dataText}>속도 (Speed): {location.coords.speed?.toFixed(2) ?? 'N/A'} m/s</Text> */}
+          <Text style={styles.dataText}>속도 (Speed): {' '}{location.coords.speed!=null?(location.coords.speed*3.6).toFixed(1):'N/A'}{' '}km/h</Text>
           <Text style={styles.dataText}>방향 (Heading): {location.coords.heading?.toFixed(2) ?? 'N/A'} °</Text>
           <Text style={styles.dataText}>정확도 (Accuracy): {location.coords.accuracy?.toFixed(2) ?? 'N/A'} m</Text>
           <Text style={styles.dataText}>타임스탬프 (Timestamp): {new Date(location.timestamp).toLocaleString('ko-KR')}</Text>

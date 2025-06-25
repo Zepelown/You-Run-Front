@@ -1,7 +1,8 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRunning } from '@/context/RunningContext';
+import * as Location from 'expo-location';
+import { useEffect, useMemo, useState } from 'react'; // 💥 useMemo를 import 합니다.
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Polyline, Region } from 'react-native-maps';
-import { useState, useEffect, useMemo } from 'react'; // 💥 useMemo를 import 합니다.
 
 // ==================================================================
 // 헬퍼 함수 (계산 로직)
@@ -69,14 +70,23 @@ const formatTime = (totalSeconds: number) => {
 // ==================================================================
 
 export default function RunningScreen() {
-    const { isActive, elapsedTime, path, startRunning, stopRunning } = useRunning();
+    const { isActive, elapsedTime, path,currentSpeed, startRunning, stopRunning } = useRunning();
     const [mapRegion, setMapRegion] = useState<Region | undefined>(undefined);
 
-    // 💥 useMemo를 사용해 path가 변경될 때만 거리를 다시 계산합니다. (성능 최적화)
-    const distance = useMemo(() => calculateTotalDistance(path), [path]);
-
-    // 💥 useMemo를 사용해 거리나 시간이 변경될 때만 페이스를 다시 계산합니다.
-    const pace = useMemo(() => calculatePace(distance, elapsedTime), [distance, elapsedTime]);
+  // —–– 처음 마운트 시 위치 권한 요청 & 초기 위치 설정
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const loc = await Location.getCurrentPositionAsync({});
+      setMapRegion({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    })();
+  }, []);
 
     useEffect(() => {
         if (path.length > 0) {
@@ -90,6 +100,10 @@ export default function RunningScreen() {
         }
     }, [path]);
 
+    // 거리, 페이스, 속도 계산 (useMemo로 최적화)
+  const distance = useMemo(() => calculateTotalDistance(path), [path]);
+  const pace     = useMemo(() => calculatePace(distance, elapsedTime), [distance, elapsedTime]);
+
     return (
         <View style={styles.container}>
             <MapView
@@ -100,8 +114,16 @@ export default function RunningScreen() {
                     latitudeDelta: 0.0922,
                     longitudeDelta: 0.0421,
                 }}
-                region={mapRegion}
-            >
+                // mapRegion이 undefined가 아닐 때만 region prop으로 넘김
+                {...(mapRegion && { region: mapRegion })}
+                // 내 위치 파란 점 표시
+                showsUserLocation={true}
+                // 내 위치 업데이트 시 지도가 따라오도록
+                followsUserLocation={true}
+                // 내 위치 버튼(안드로이드) 노출
+                showsMyLocationButton={true}
+                >
+                
                 <Polyline
                     coordinates={path}
                     strokeColor="#007aff"
@@ -113,8 +135,11 @@ export default function RunningScreen() {
                 {/* 💥 계산된 distance 변수를 사용합니다. */}
                 <Text style={styles.distance}>{distance.toFixed(2)} km</Text>
                 <View style={styles.statsContainer}>
+                    {/* 1) 현재 속도 */}
+                    <Text style={styles.stat}>{currentSpeed.toFixed(1)} km/h</Text>
+                    {/* 2) 경과 시간 */}
                     <Text style={styles.stat}>{formatTime(elapsedTime)} 시간</Text>
-                    {/* 💥 계산된 pace 변수를 사용합니다. */}
+                    {/* 3) 페이스 */}
                     <Text style={styles.stat}>{pace} 페이스</Text>
                 </View>
                 <Pressable
