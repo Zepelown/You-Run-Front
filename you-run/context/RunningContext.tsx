@@ -15,6 +15,7 @@ interface RunningState {
   path: Location.LocationObjectCoords[];
   startRunning: () => void;
   stopRunning: () => void;
+  addToPath: (coords: Location.LocationObjectCoords) => void; // ✅ 추가
 }
 
 const RunningContext = createContext<RunningState | undefined>(undefined);
@@ -40,16 +41,19 @@ export const RunningProvider = ({
         setElapsedTime((prev) => prev + 1);
       }, 1000);
     } else {
-      if (timerInterval.current) {
-        clearInterval(timerInterval.current);
-      }
+      if (timerInterval.current) clearInterval(timerInterval.current);
     }
     return () => {
       if (timerInterval.current) clearInterval(timerInterval.current);
     };
   }, [isActive]);
 
-  // GPS 시작/정지 로직
+  // ✅ 외부에서 경로 추가할 수 있도록 함수 정의
+  const addToPath = (coords: Location.LocationObjectCoords) => {
+    setPath((prevPath) => [...prevPath, coords]);
+  };
+
+  // GPS 시작
   const startLocationTracking = async () => {
     const { status: foregroundStatus } =
       await Location.requestForegroundPermissionsAsync();
@@ -65,19 +69,17 @@ export const RunningProvider = ({
       return;
     }
 
-    // 포그라운드에서 위치 업데이트를 구독하여 실시간으로 경로(path) 상태를 업데이트
     locationSubscription.current = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 1000, // 1초마다
-        distanceInterval: 10, // 10미터마다
+        timeInterval: 1000,
+        distanceInterval: 10,
       },
       (location) => {
         setPath((prevPath) => [...prevPath, location.coords]);
       }
     );
 
-    // 백그라운드 위치 업데이트 시작
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.BestForNavigation,
       timeInterval: 5000,
@@ -112,12 +114,19 @@ export const RunningProvider = ({
   const stopRunning = () => {
     setIsActive(false);
     stopLocationTracking();
-    // 여기서 최종 path와 elapsedTime을 서버에 저장하는 API를 호출할 수 있습니다.
+    // 서버 저장 로직 위치
   };
 
   return (
     <RunningContext.Provider
-      value={{ isActive, elapsedTime, path, startRunning, stopRunning }}
+      value={{
+        isActive,
+        elapsedTime,
+        path,
+        startRunning,
+        stopRunning,
+        addToPath, // ✅ context에 포함
+      }}
     >
       {children}
     </RunningContext.Provider>
