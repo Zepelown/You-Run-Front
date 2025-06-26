@@ -70,7 +70,7 @@ const formatTime = (totalSeconds: number) => {
 // ==================================================================
 
 export default function RunningScreen() {
-    const { isActive, elapsedTime, path,currentSpeed, startRunning, stopRunning } = useRunning();
+    const { isActive, elapsedTime, path,currentSpeed, totalDistance, startRunning, stopRunning } = useRunning();
     const [mapRegion, setMapRegion] = useState<Region | undefined>(undefined);
 
   // —–– 처음 마운트 시 위치 권한 요청 & 초기 위치 설정
@@ -133,7 +133,7 @@ export default function RunningScreen() {
 
             <View style={styles.overlay}>
                 {/* 💥 계산된 distance 변수를 사용합니다. */}
-                <Text style={styles.distance}>{distance.toFixed(2)} km</Text>
+                <Text style={styles.distance}>{totalDistance.toFixed(2)} km</Text>
                 <View style={styles.statsContainer}>
                     {/* 1) 현재 속도 */}
                     <Text style={styles.stat}>{currentSpeed.toFixed(1)} km/h</Text>

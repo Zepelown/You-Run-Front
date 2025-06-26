@@ -11,11 +11,61 @@ import React, {
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
+// 간단한 1D 칼만 필터 구현
+class KalmanFilter1D {
+  private R: number;  // 프로세스 노이즈 공분산
+  private Q: number;  // 측정 노이즈 공분산
+  private x: number;  // 상태 추정값
+  private P: number;  // 오차 공분산
+
+  constructor(R = 0.01, Q = 0.1) {
+    this.R = R;
+    this.Q = Q;
+    this.x = NaN;
+    this.P = NaN;
+  }
+
+  filter(z: number): number {
+    if (isNaN(this.x)) {
+      // 초기 상태 설정
+      this.x = z;
+      this.P = this.Q;
+    } else {
+      // 예측 단계
+      const xPred = this.x;
+      const PPred = this.P + this.R;
+      // 업데이트 단계
+      const K = PPred / (PPred + this.Q);
+      this.x = xPred + K * (z - xPred);
+      this.P = (1 - K) * PPred;
+    }
+    return this.x;
+  }
+}
+
+// 경로 좌표 타입
+interface Coord {
+  latitude: number;
+  longitude: number;
+}
+
+
+// interface RunningState {
+//   isActive: boolean;
+//   elapsedTime: number;
+//   path: { latitude: number; longitude: number }[];
+//   currentSpeed: number;
+//   startRunning: () => void;
+//   stopRunning: () => void;
+// }
+
+// 컨텍스트에 제공될 상태 타입
 interface RunningState {
   isActive: boolean;
   elapsedTime: number;
-  path: { latitude: number; longitude: number }[];
-  currentSpeed: number;
+  path: Coord[];
+  currentSpeed: number;    // 필터링된 순간 속도 (km/h)
+  totalDistance: number;   // 필터링된 누적 거리 (km)
   startRunning: () => void;
   stopRunning: () => void;
 }
@@ -27,15 +77,34 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [isActive, setIsActive] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [path, setPath] = useState<{ latitude: number; longitude: number }[]>(
-    []
-  );
+  //const [path, setPath] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [path, setPath] = useState<Coord[]>([]);
   const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [totalDistance, setTotalDistance] = useState(0);
 
   const timerInterval = useRef<number | null>(null);
-  const locationSubscription = useRef<Location.LocationSubscription | null>(
-    null
-  );
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+  const lastCoordRef = useRef<Coord | null>(null);
+
+  // 칼만 필터 인스턴스
+  const speedFilter = useRef(new KalmanFilter1D(0.01, 0.1));
+  const distFilter  = useRef(new KalmanFilter1D(0.01, 0.1));
+
+
+  // 하버사인 공식으로 두 좌표 간 거리 계산 (km)
+  const haversineDistance = (
+    lat1: number, lon1: number,
+    lat2: number, lon2: number
+  ): number => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
 
   // 스톱워치 로직
   useEffect(() => {
@@ -65,8 +134,23 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
       (location) => {
         //console.log('📍 위치 업데이트 콜백:', location.coords);
         const { latitude, longitude, speed } = location.coords;
-        setPath((prev) => [...prev, { latitude, longitude }]);
-        setCurrentSpeed(speed != null ? speed * 3.6 : 0);
+        // 경로 추가
+        setPath(prev => {
+          const updated = [...prev, { latitude, longitude }];
+          lastCoordRef.current = { latitude, longitude };
+          return updated;
+        });
+        // 거리 증가분 계산 및 필터링
+        const prev = lastCoordRef.current ?? { latitude, longitude };
+        const rawDist = haversineDistance(prev.latitude, prev.longitude, latitude, longitude);
+        const filtDist = distFilter.current.filter(rawDist);
+        setTotalDistance(d => d + filtDist);
+        // 속도 필터링 (km/h)
+        const rawSpeedKmH = speed != null ? speed * 3.6 : 0;
+        const filtSpeed = speedFilter.current.filter(rawSpeedKmH);
+        setCurrentSpeed(filtSpeed);
+        // setPath((prev) => [...prev, { latitude, longitude }]);
+        // setCurrentSpeed(speed != null ? speed * 3.6 : 0);
       }
     );
 
@@ -111,6 +195,7 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
     setPath([]);
     setElapsedTime(0);
     setCurrentSpeed(0);
+    setTotalDistance(0);
     setIsActive(true);
     startLocationTracking();
   };
@@ -128,6 +213,7 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
         elapsedTime,
         path,
         currentSpeed,
+        totalDistance,
         startRunning,
         stopRunning,
       }}
