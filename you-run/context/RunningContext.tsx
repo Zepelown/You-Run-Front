@@ -68,6 +68,8 @@ interface RunningState {
   totalDistance: number;   // 필터링된 누적 거리 (km)
   startRunning: () => void;
   stopRunning: () => void;
+  resumeRunning: () => void;
+  resetRunning: () => void;
 }
 
 const RunningContext = createContext<RunningState | undefined>(undefined);
@@ -77,7 +79,6 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [isActive, setIsActive] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-  //const [path, setPath] = useState<{ latitude: number; longitude: number }[]>([]);
   const [path, setPath] = useState<Coord[]>([]);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [totalDistance, setTotalDistance] = useState(0);
@@ -134,21 +135,44 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
       (location) => {
         //console.log('📍 위치 업데이트 콜백:', location.coords);
         const { latitude, longitude, speed } = location.coords;
-        // 경로 추가
-        setPath(prev => {
-          const updated = [...prev, { latitude, longitude }];
-          lastCoordRef.current = { latitude, longitude };
-          return updated;
-        });
-        // 거리 증가분 계산 및 필터링
-        const prev = lastCoordRef.current ?? { latitude, longitude };
-        const rawDist = haversineDistance(prev.latitude, prev.longitude, latitude, longitude);
-        const filtDist = distFilter.current.filter(rawDist);
-        setTotalDistance(d => d + filtDist);
-        // 속도 필터링 (km/h)
-        const rawSpeedKmH = speed != null ? speed * 3.6 : 0;
-        const filtSpeed = speedFilter.current.filter(rawSpeedKmH);
+
+        // 1) 이전 좌표 읽어오기
+        const prev = lastCoordRef.current;
+
+        if (prev) {
+          // 2) raw distance 계산 → 필터 → 누적
+          const rawDist = haversineDistance( prev.latitude, prev.longitude, latitude, longitude);
+          const filtDist = distFilter.current.filter(rawDist);
+          setTotalDistance(d => d + filtDist);
+        }
+        
+        // 3) 이제 "이전 좌표"를 최신으로 갱신
+        lastCoordRef.current = {latitude, longitude};
+
+        // 4) path 업데이트
+        setPath(prev =>[...prev, {latitude,longitude}]);
+
+        // 5) 속도 필터링
+        const rawSpeedKmH = speed != null ? speed *3.6:0;
+        const safeRawSpeed = rawSpeedKmH > 0 ? rawSpeedKmH : 0;  // 음수 speed 방지
+        const filtSpeed = speedFilter.current.filter(safeRawSpeed);
         setCurrentSpeed(filtSpeed);
+
+        // // 경로 추가
+        // setPath(prev => {
+        //   const updated = [...prev, { latitude, longitude }];
+        //   lastCoordRef.current = { latitude, longitude };
+        //   return updated;
+        // });
+        // // 거리 증가분 계산 및 필터링
+        // const prev = lastCoordRef.current ?? { latitude, longitude };
+        // const rawDist = haversineDistance(prev.latitude, prev.longitude, latitude, longitude);
+        // const filtDist = distFilter.current.filter(rawDist);
+        // setTotalDistance(d => d + filtDist);
+        // // 속도 필터링 (km/h)
+        // const rawSpeedKmH = speed != null ? speed * 3.6 : 0;
+        // const filtSpeed = speedFilter.current.filter(rawSpeedKmH);
+        // setCurrentSpeed(filtSpeed);
         // setPath((prev) => [...prev, { latitude, longitude }]);
         // setCurrentSpeed(speed != null ? speed * 3.6 : 0);
       }
@@ -206,6 +230,26 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
     // 여기에서 path/elapsedTime 등을 서버에 저장할 수 있습니다.
   };
 
+    const resumeRunning = () => {
+    // 재개: 데이터 초기화 없이 다시 타이머·위치추적 시작
+    setIsActive(true);
+    startLocationTracking();
+  };
+
+
+  const resetRunning = ()=>{
+    // 위치 구독 멈추고
+    stopLocationTracking();
+    // 타이머 지우고
+    if (timerInterval.current) clearInterval(timerInterval.current);
+    //상태들 초기화
+    setIsActive(false);
+    setElapsedTime(0);
+    setPath([]);
+    setCurrentSpeed(0);
+    setTotalDistance(0);
+  }
+
   return (
     <RunningContext.Provider
       value={{
@@ -216,6 +260,8 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
         totalDistance,
         startRunning,
         stopRunning,
+        resumeRunning,
+        resetRunning,
       }}
     >
       {children}

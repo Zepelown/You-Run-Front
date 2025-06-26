@@ -1,6 +1,7 @@
 import { useRunning } from '@/context/RunningContext';
 import * as Location from 'expo-location';
-import { useEffect, useMemo, useState } from 'react'; // 💥 useMemo를 import 합니다.
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Polyline, Region } from 'react-native-maps';
 
@@ -8,72 +9,74 @@ import MapView, { Polyline, Region } from 'react-native-maps';
 // 헬퍼 함수 (계산 로직)
 // ==================================================================
 
-/**
- * 두 지점의 위도, 경도 좌표를 받아 거리를 km 단위로 계산합니다 (하버사인 공식).
- */
+/** 하버사인 공식으로 두 좌표 간 직선 거리를 km 단위로 계산 */
 const haversineDistance = (
-    lat1: number, lon1: number,
-    lat2: number, lon2: number
+  lat1: number, lon1: number,
+  lat2: number, lon2: number
 ): number => {
-    const R = 6371; // 지구의 반경 (km)
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+  const R = 6371; // 지구 반경 (km)
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-/**
- * GPS 좌표 배열(path)을 받아 총 이동 거리를 계산합니다.
- */
+/** GPS 좌표 배열로부터 총 이동 거리를 누적 계산 */
 const calculateTotalDistance = (path: { latitude: number; longitude: number }[]): number => {
-    if (path.length < 2) return 0;
-    
-    let totalDistance = 0;
-    for (let i = 1; i < path.length; i++) {
-        const prevCoord = path[i - 1];
-        const currentCoord = path[i];
-        totalDistance += haversineDistance(
-            prevCoord.latitude, prevCoord.longitude,
-            currentCoord.latitude, currentCoord.longitude
-        );
-    }
-    return totalDistance;
+  if (path.length < 2) return 0;
+  return path.slice(1).reduce((sum, curr, i) => {
+    const prev = path[i];
+    return sum + haversineDistance(prev.latitude, prev.longitude, curr.latitude, curr.longitude);
+  }, 0);
 };
 
-/**
- * 총 이동 거리(km)와 경과 시간(초)을 받아 페이스를 '분'초"' 형식으로 계산합니다.
- */
+/** 총 이동 거리(km)와 경과 시간(초)를 받아 페이스(분'초")를 계산 */
 const calculatePace = (distanceKm: number, elapsedSeconds: number): string => {
-    if (distanceKm === 0 || elapsedSeconds === 0) {
-        return "0'00\"";
-    }
-    const paceSecondsPerKm = elapsedSeconds / distanceKm;
-    const minutes = Math.floor(paceSecondsPerKm / 60);
-    const seconds = Math.round(paceSecondsPerKm % 60);
-    return `${minutes}'${String(seconds).padStart(2, '0')}"`;
+  if (distanceKm === 0 || elapsedSeconds === 0) return `0'00"`;
+  const secPerKm = elapsedSeconds / distanceKm;
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.round(secPerKm % 60);
+  return `${m}'${String(s).padStart(2, '0')}"`;
 };
 
-
-// 초를 '분:초' 형식으로 변환하는 헬퍼 함수
+/** 초를 mm:ss 형식 문자열로 변환 */
 const formatTime = (totalSeconds: number) => {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
 // ==================================================================
-// 메인 컴포넌트
+// RunningScreen 컴포넌트
 // ==================================================================
 
 export default function RunningScreen() {
-    const { isActive, elapsedTime, path,currentSpeed, totalDistance, startRunning, stopRunning } = useRunning();
-    const [mapRegion, setMapRegion] = useState<Region | undefined>(undefined);
+  const router = useRouter();
+  const {
+    isActive,
+    elapsedTime,
+    path,
+    currentSpeed,
+    totalDistance,
+    startRunning,
+    stopRunning,
+    resumeRunning,  
+    resetRunning,
+  } = useRunning();
 
-  // —–– 처음 마운트 시 위치 권한 요청 & 초기 위치 설정
+  const displaySpeed = currentSpeed > 0.1 ? currentSpeed : 0;
+  const displayPace = totalDistance > 0.01 ? calculatePace(totalDistance,elapsedTime) : `0'00"`;
+
+  // 지도를 중앙에 맞출 때 쓸 region 상태
+  const [mapRegion, setMapRegion] = useState<Region | undefined>(undefined);
+
+  // “일시정지” 상태 관리
+  const [isPaused, setIsPaused] = useState(false);
+
+  // —–– 마운트 시 위치 권한 요청 & 초기Region 설정
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -88,127 +91,169 @@ export default function RunningScreen() {
     })();
   }, []);
 
-    useEffect(() => {
-        if (path.length > 0) {
-            const latestCoordinate = path[path.length - 1];
-            setMapRegion({
-                latitude: latestCoordinate.latitude,
-                longitude: latestCoordinate.longitude,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
-            });
-        }
-    }, [path]);
+  // —–– path가 바뀔 때마다 지도를 최신 좌표로 이동
+  useEffect(() => {
+    if (path.length > 0) {
+      const last = path[path.length - 1];
+      setMapRegion({
+        latitude: last.latitude,
+        longitude: last.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      });
+    }
+  }, [path]);
 
-    // 거리, 페이스, 속도 계산 (useMemo로 최적화)
-  const distance = useMemo(() => calculateTotalDistance(path), [path]);
-  const pace     = useMemo(() => calculatePace(distance, elapsedTime), [distance, elapsedTime]);
+ /** 메인 버튼(시작/정지/재개) 눌렀을 때 */
+  const onMainPress = () => {
+    if (isActive) {
+      // 달리는 중 → 일시정지
+      stopRunning();
+      setIsPaused(true);
+    } else if (isPaused) {
+      // 일시정지 중 → 재개
+      resumeRunning();
+      setIsPaused(false);
+    } else {
+      // 처음 (또는 완전 종료 후) → 새로 시작
+      startRunning();
+      setIsPaused(false);
+    }
+  }
 
-    return (
-        <View style={styles.container}>
-            <MapView
-                style={StyleSheet.absoluteFill}
-                initialRegion={{
-                    latitude: 37.5665,
-                    longitude: 126.9780,
-                    latitudeDelta: 0.0922,
-                    longitudeDelta: 0.0421,
-                }}
-                // mapRegion이 undefined가 아닐 때만 region prop으로 넘김
-                {...(mapRegion && { region: mapRegion })}
-                // 내 위치 파란 점 표시
-                showsUserLocation={true}
-                // 내 위치 업데이트 시 지도가 따라오도록
-                followsUserLocation={true}
-                // 내 위치 버튼(안드로이드) 노출
-                showsMyLocationButton={true}
-                >
-                
-                <Polyline
-                    coordinates={path}
-                    strokeColor="#007aff"
-                    strokeWidth={6}
-                />
-            </MapView>
 
-            <View style={styles.overlay}>
-                {/* 💥 계산된 distance 변수를 사용합니다. */}
-                <Text style={styles.distance}>{totalDistance.toFixed(2)} km</Text>
-                <View style={styles.statsContainer}>
-                    {/* 1) 현재 속도 */}
-                    <Text style={styles.stat}>{currentSpeed.toFixed(1)} km/h</Text>
-                    {/* 2) 경과 시간 */}
-                    <Text style={styles.stat}>{formatTime(elapsedTime)} 시간</Text>
-                    {/* 3) 페이스 */}
-                    <Text style={styles.stat}>{pace} 페이스</Text>
-                </View>
-                <Pressable
-                    onPress={!isActive ? startRunning : stopRunning}
-                    style={({ pressed }) => [
-                        styles.runButton,
-                        { backgroundColor: isActive ? '#ff4d4d' : '#007aff' },
-                        pressed && { opacity: 0.8 },
-                    ]}
-                >
-                    <Text style={styles.runButtonText}>{!isActive ? '시작' : '정지'}</Text>
-                </Pressable>
-            </View>
+  /** “종료” 클릭 → 요약 화면으로 이동 (path, 거리, 시간 전달) */
+  const handleFinish = () => {
+    stopRunning();
+    resetRunning();
+    router.push({
+      pathname: '/summary',
+      params: {
+        data: JSON.stringify({ path, totalDistance, elapsedTime }),
+      },
+    });
+  };
+
+    // 버튼에 들어갈 텍스트 결정
+    const mainLabel = isActive ? '정지': isPaused  ? '재개'  : '시작';
+
+
+
+  // 페이스 = 누적거리(totalDistance) + 누적시간(elapsedTime) 기준
+  const pace = useMemo(
+    () => calculatePace(totalDistance, elapsedTime),
+    [totalDistance, elapsedTime]
+  );
+
+  return (
+    <View style={styles.container}>
+      {/* 지도가 화면 전체 */}
+      <MapView
+        style={StyleSheet.absoluteFill}
+        initialRegion={{
+          latitude: 37.5665,
+          longitude: 126.9780,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        }}
+        {...(mapRegion && { region: mapRegion })}
+        showsUserLocation
+        followsUserLocation
+        showsMyLocationButton
+      >
+        <Polyline coordinates={path} strokeColor="#007aff" strokeWidth={6} />
+      </MapView>
+
+      {/* 오버레이 정보 패널 */}
+      <View style={styles.overlay}>
+        {/* 누적 거리 */}
+        <Text style={styles.distance}>{totalDistance.toFixed(2)} km</Text>
+        {/* 현재 속도 / 경과 시간 / 페이스 */}
+        <View style={styles.statsContainer}>
+          <Text style={styles.stat}>{displaySpeed.toFixed(1)} km/h</Text>
+          <Text style={styles.stat}>{formatTime(elapsedTime)} 시간</Text>
+          <Text style={styles.stat}>{displayPace} 페이스</Text>
         </View>
-    );
+
+        {/* 버튼 행: 시작↔정지, (일시정지 후) 종료 */}
+        <View style={styles.buttonRow}>
+          <Pressable
+              onPress={onMainPress}
+            style={[
+              styles.controlButton,
+              { backgroundColor: isActive ? '#ff4d4d' : '#007aff' },
+            ]}
+            >
+            <Text style={styles.controlText}>{mainLabel}</Text>
+          </Pressable>
+
+          {/* 한 번이라도 실행 후 멈춘 상태일 때만 노출 */}
+          {(isPaused || (!isActive && elapsedTime > 0)) && (
+            <Pressable
+              onPress={handleFinish}
+              style={[styles.controlButton, { backgroundColor: '#333' }]}
+            >
+              <Text style={styles.controlText}>종료</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </View>
+  );
 }
 
-
-// ... styles는 이전과 동일합니다.
+// ==================================================================
+// 스타일
+// ==================================================================
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-    },
-    overlay: {
-        width: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        padding: 20,
-        paddingBottom: 40,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        alignItems: 'center',
-    },
-    distance: {
-        fontSize: 60,
-        fontWeight: '800',
-        color: '#1c1c1e',
-    },
-    statsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '100%',
-        marginTop: 15,
-        marginBottom: 20,
-    },
-    stat: {
-        fontSize: 24,
-        fontWeight: '600',
-        color: '#333',
-        textAlign: 'center',
-        flex: 1,
-    },
-    runButton: {
-        width: '100%',
-        paddingVertical: 18,
-        borderRadius: 15,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    runButtonText: {
-        color: 'white',
-        fontSize: 20,
-        fontWeight: 'bold',
-        letterSpacing: 1,
-    },
+  container: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  overlay: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    padding: 20,
+    paddingBottom: 40,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    alignItems: 'center',
+  },
+  distance: {
+    fontSize: 60,
+    fontWeight: '800',
+    color: '#1c1c1e',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 15,
+    marginBottom: 20,
+  },
+  stat: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    flex: 1,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  controlButton: {
+    flex: 1,
+    marginHorizontal: 5,
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  controlText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
 });
