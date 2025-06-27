@@ -1,7 +1,7 @@
 import { useRunning } from '@/context/RunningContext';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Polyline, Region } from 'react-native-maps';
 
@@ -61,6 +61,7 @@ export default function RunningScreen() {
     path,
     currentSpeed,
     totalDistance,
+    movingTime,
     startRunning,
     stopRunning,
     resumeRunning,  
@@ -68,8 +69,7 @@ export default function RunningScreen() {
   } = useRunning();
 
   const displaySpeed = currentSpeed > 0.1 ? currentSpeed : 0;
-  const displayPace = totalDistance > 0.01 ? calculatePace(totalDistance,elapsedTime) : `0'00"`;
-
+  const instantPace = displaySpeed > 0 ? calculatePace(1,3600 / displaySpeed) : `0'00"` 
   // 지도를 중앙에 맞출 때 쓸 region 상태
   const [mapRegion, setMapRegion] = useState<Region | undefined>(undefined);
 
@@ -124,13 +124,16 @@ export default function RunningScreen() {
 
   /** “종료” 클릭 → 요약 화면으로 이동 (path, 거리, 시간 전달) */
   const handleFinish = () => {
+    // 1) 달리기 멈추기
     stopRunning();
+    // 2) 전달할 데이터 스냅샷
+    const snapshot = { path, totalDistance, elapsedTime, movingTime };
+    // 3) 컨텍스트 완전 초기화
     resetRunning();
-    router.push({
-      pathname: '/summary',
-      params: {
-        data: JSON.stringify({ path, totalDistance, elapsedTime }),
-      },
+    // 4) replace 네비게이션 (push가 아니라 replace!)
+    router.replace({
+        pathname: '/summary',
+        params: { data: JSON.stringify(snapshot) },
     });
   };
 
@@ -139,11 +142,11 @@ export default function RunningScreen() {
 
 
 
-  // 페이스 = 누적거리(totalDistance) + 누적시간(elapsedTime) 기준
-  const pace = useMemo(
-    () => calculatePace(totalDistance, elapsedTime),
-    [totalDistance, elapsedTime]
-  );
+//   // 페이스 = 누적거리(totalDistance) + 누적시간(elapsedTime) 기준
+//   const pace = useMemo(
+//     () => calculatePace(totalDistance, elapsedTime),
+//     [totalDistance, elapsedTime]
+//   );
 
   return (
     <View style={styles.container}>
@@ -172,7 +175,7 @@ export default function RunningScreen() {
         <View style={styles.statsContainer}>
           <Text style={styles.stat}>{displaySpeed.toFixed(1)} km/h</Text>
           <Text style={styles.stat}>{formatTime(elapsedTime)} 시간</Text>
-          <Text style={styles.stat}>{displayPace} 페이스</Text>
+          <Text style={styles.stat}>{instantPace} 페이스</Text>
         </View>
 
         {/* 버튼 행: 시작↔정지, (일시정지 후) 종료 */}

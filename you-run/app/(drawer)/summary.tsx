@@ -20,7 +20,6 @@ const calculatePace = (km: number, sec: number) => {
 export default function SummaryScreen() {
   const router = useRouter();
   const { data } = useLocalSearchParams<{data:string}>();
-  // data: '{"path":[{…}], "totalDistance":3.04, "elapsedTime":1234}'
   const { path, totalDistance, elapsedTime } = JSON.parse(data);
 
   // 화면 크기 기반으로 지도 크기 계산
@@ -32,7 +31,7 @@ export default function SummaryScreen() {
     year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short'
   });
 
-  const pace = calculatePace(totalDistance, elapsedTime);
+  const pace = calculatePace(totalDistance,elapsedTime);
   // (칼로리는 따로 계산 로직을 넣으셔도 되고, 우선 예시로 고정)
   const calories = Math.round(totalDistance * 60);
 
