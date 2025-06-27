@@ -1,6 +1,7 @@
 import { useRunning } from '@/context/RunningContext';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
+import * as Speech from 'expo-speech';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Polyline, Region } from 'react-native-maps';
@@ -9,37 +10,14 @@ import MapView, { Polyline, Region } from 'react-native-maps';
 // 헬퍼 함수 (계산 로직)
 // ==================================================================
 
-/** 하버사인 공식으로 두 좌표 간 직선 거리를 km 단위로 계산 */
-const haversineDistance = (
-  lat1: number, lon1: number,
-  lat2: number, lon2: number
-): number => {
-  const R = 6371; // 지구 반경 (km)
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
 
-/** GPS 좌표 배열로부터 총 이동 거리를 누적 계산 */
-const calculateTotalDistance = (path: { latitude: number; longitude: number }[]): number => {
-  if (path.length < 2) return 0;
-  return path.slice(1).reduce((sum, curr, i) => {
-    const prev = path[i];
-    return sum + haversineDistance(prev.latitude, prev.longitude, curr.latitude, curr.longitude);
-  }, 0);
-};
-
-/** 총 이동 거리(km)와 경과 시간(초)를 받아 페이스(분'초")를 계산 */
-const calculatePace = (distanceKm: number, elapsedSeconds: number): string => {
-  if (distanceKm === 0 || elapsedSeconds === 0) return `0'00"`;
-  const secPerKm = elapsedSeconds / distanceKm;
+// 순간 페이스: 1km 달리는 데 걸리는 시간
+const calculateInstantPace = (speedKmh: number): string => {
+  if (speedKmh <= 0) return `0'00"`;
+  const secPerKm = 3600 / speedKmh;
   const m = Math.floor(secPerKm / 60);
   const s = Math.round(secPerKm % 60);
-  return `${m}'${String(s).padStart(2, '0')}"`;
+  return `${m}'${String(s).padStart(2,'0')}"`;
 };
 
 /** 초를 mm:ss 형식 문자열로 변환 */
@@ -61,63 +39,69 @@ export default function RunningScreen() {
     path,
     currentSpeed,
     totalDistance,
-    movingTime,
     startRunning,
     stopRunning,
     resumeRunning,  
     resetRunning,
   } = useRunning();
 
-  const displaySpeed = currentSpeed > 0.1 ? currentSpeed : 0;
-  const instantPace = displaySpeed > 0 ? calculatePace(1,3600 / displaySpeed) : `0'00"` 
-  // 지도를 중앙에 맞출 때 쓸 region 상태
-  const [mapRegion, setMapRegion] = useState<Region | undefined>(undefined);
 
-  // “일시정지” 상태 관리
-  const [isPaused, setIsPaused] = useState(false);
+    // 화면용 속도/페이스
+    const displaySpeed = currentSpeed > 0.1 ? currentSpeed : 0;
+    const instantPace = calculateInstantPace(displaySpeed);
+  
+    // 지도를 중앙에 맞출 때 쓸 region 상태
+    const [mapRegion, setMapRegion] = useState<Region>();
 
-  // —–– 마운트 시 위치 권한 요청 & 초기Region 설정
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const loc = await Location.getCurrentPositionAsync({});
-      setMapRegion({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      });
-    })();
-  }, []);
+    // “일시정지” 상태 관리
+    const [isPaused, setIsPaused] = useState(false);
 
-  // —–– path가 바뀔 때마다 지도를 최신 좌표로 이동
-  useEffect(() => {
-    if (path.length > 0) {
-      const last = path[path.length - 1];
-      setMapRegion({
-        latitude: last.latitude,
-        longitude: last.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      });
-    }
-  }, [path]);
+    // —–– 마운트 시 위치 권한 요청 & 초기Region 설정
+    useEffect(() => {
+        (async () => {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const loc = await Location.getCurrentPositionAsync();
+        setMapRegion({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+        });
+        })();
+    }, []);
+
+    // —–– path가 바뀔 때마다 지도를 최신 좌표로 이동
+    useEffect(() => {
+        if (path.length > 0) {
+            const last = path[path.length - 1];
+            setMapRegion({
+                latitude: last.latitude,
+                longitude: last.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+            });
+        }
+    }, [path]);
 
  /** 메인 버튼(시작/정지/재개) 눌렀을 때 */
   const onMainPress = () => {
     if (isActive) {
-      // 달리는 중 → 일시정지
-      stopRunning();
-      setIsPaused(true);
+        // 달리는 중 → 일시정지
+        stopRunning();
+        setIsPaused(true);
+        Speech.speak('일시 정지 합니다.')
     } else if (isPaused) {
       // 일시정지 중 → 재개
-      resumeRunning();
-      setIsPaused(false);
+        resumeRunning();
+        setIsPaused(false);
+        Speech.speak('러닝을 재개합니다.')
     } else {
-      // 처음 (또는 완전 종료 후) → 새로 시작
-      startRunning();
-      setIsPaused(false);
+        // 처음 (또는 완전 종료 후) → 새로 시작
+        startRunning();
+        setIsPaused(false);
+        Speech.speak('러닝을 시작합니다.')
+
     }
   }
 
@@ -126,8 +110,9 @@ export default function RunningScreen() {
   const handleFinish = () => {
     // 1) 달리기 멈추기
     stopRunning();
+    Speech.speak('러닝을 종료합니다.')
     // 2) 전달할 데이터 스냅샷
-    const snapshot = { path, totalDistance, elapsedTime, movingTime };
+    const snapshot = { path, totalDistance, elapsedTime };
     // 3) 컨텍스트 완전 초기화
     resetRunning();
     // 4) replace 네비게이션 (push가 아니라 replace!)
@@ -142,11 +127,19 @@ export default function RunningScreen() {
 
 
 
-//   // 페이스 = 누적거리(totalDistance) + 누적시간(elapsedTime) 기준
-//   const pace = useMemo(
-//     () => calculatePace(totalDistance, elapsedTime),
-//     [totalDistance, elapsedTime]
-//   );
+    // 다음 안내할 거리(km) 상태
+    const [nextAnnounceKm, setNextAnnounceKm] = useState(0.1);
+
+    // totalDistance가 nextAnnounceKm를 넘으면 음성 안내하고,
+    // 다음 안내 지점을 +0.1km 올려준다.
+    useEffect(() => {
+        if (totalDistance >= nextAnnounceKm) {
+            const meters = Math.round(nextAnnounceKm * 1000);
+            Speech.speak(`${meters}미터 지점에 도달했습니다.`);
+            setNextAnnounceKm(nextAnnounceKm + 0.1);
+        }
+    }, [totalDistance, nextAnnounceKm]);
+
 
   return (
     <View style={styles.container}>

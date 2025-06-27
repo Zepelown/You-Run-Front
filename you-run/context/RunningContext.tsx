@@ -56,7 +56,6 @@ interface RunningState {
   path: Coord[];
   currentSpeed: number;    // 필터링된 순간 속도 (km/h)
   totalDistance: number;   // 필터링된 누적 거리 (km)
-  movingTime: number;
   startRunning: () => void;
   stopRunning: () => void;
   resumeRunning: () => void;
@@ -70,7 +69,6 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [isActive, setIsActive] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [movingTime, setMovingTime] = useState(0);
   const [path, setPath] = useState<Coord[]>([]);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [totalDistance, setTotalDistance] = useState(0);
@@ -104,19 +102,13 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (isActive) {
       timerInterval.current = setInterval(() => {
-        setElapsedTime((t) => t + 1);
-        // 1초마다, 속도가 0.5km/h 이상일 때만 이동 시간 카운트
-       if (currentSpeed > 0.5) {
-         setMovingTime(t => t + 1);
-       }
+        setElapsedTime(t => t + 1);
       }, 1000);
-    } else if (timerInterval.current !== null) {
+    } else if (timerInterval.current) {
       clearInterval(timerInterval.current);
     }
     return () => {
-      if (timerInterval.current !== null) {
-        clearInterval(timerInterval.current);
-      }
+      if (timerInterval.current) clearInterval(timerInterval.current);
     };
   }, [isActive]);
 
@@ -225,7 +217,6 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
     // 타이머 지우고
     if (timerInterval.current) clearInterval(timerInterval.current);
     //상태들 초기화
-    setMovingTime(0);
     setIsActive(false);
     setElapsedTime(0);
     setPath([]);
@@ -241,7 +232,6 @@ export const RunningProvider: React.FC<{ children: React.ReactNode }> = ({
         path,
         currentSpeed,
         totalDistance,
-        movingTime,
         startRunning,
         stopRunning,
         resumeRunning,

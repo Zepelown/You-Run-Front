@@ -3,14 +3,16 @@ import React from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { LatLng, Polyline } from 'react-native-maps';
 
-// 재사용할 헬퍼들 (복붙 혹은 별도 utils 파일로 분리)
+// 시간(mm:ss) 포맷 - 재사용할 헬퍼들 (복붙 혹은 별도 utils 파일로 분리)
 const formatTime = (sec: number) => {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 };
-const calculatePace = (km: number, sec: number) => {
-  if (km === 0 || sec === 0) return `0'00"`;
+
+// 평균 페이스(분'초") 계산
+const calculateAveragePace = (km: number, sec: number) : string => {
+  if (km < 0.01 || sec === 0) return `0'00"`;
   const paceSec = sec / km;
   const m = Math.floor(paceSec / 60);
   const s = Math.round(paceSec % 60);
@@ -31,7 +33,7 @@ export default function SummaryScreen() {
     year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short'
   });
 
-  const pace = calculatePace(totalDistance,elapsedTime);
+  const pace = calculateAveragePace(totalDistance,elapsedTime);
   // (칼로리는 따로 계산 로직을 넣으셔도 되고, 우선 예시로 고정)
   const calories = Math.round(totalDistance * 60);
 
