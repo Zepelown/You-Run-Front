@@ -41,6 +41,9 @@ export default function CustomDrawer({ closeMenu }: CustomDrawerProps) {
                 </Pressable>
                 <Pressable style={styles.menuItem} onPress={() => navigateTo('/(drawer)/map-draw-test')}>
                     <Text style={styles.menuText}>map-draw-Test</Text>
+                </Pressable>  
+                <Pressable style={styles.menuItem} onPress={() => navigateTo('/(drawer)/bot-pace')}>
+                    <Text style={styles.menuText}>bot-pace</Text>
                 </Pressable>                
                 <Pressable style={[styles.menuItem, styles.closeButton]} onPress={closeMenu}>
                     <Text style={styles.menuText}>닫기</Text>
