@@ -1,3 +1,5 @@
+// 러닝 기능
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import MapView, { Polyline, Region, Marker } from 'react-native-maps';
@@ -234,7 +236,9 @@ export default function RunningScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalText}>경로 저장이 완료되었습니다!</Text>
+            <Text style={styles.modalText}>
+              넌! 런! 오늘도 잘 달렸습니다! 경로가 자동으로 저장됩니다!
+            </Text>
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => setIsSavedModalVisible(false)}
@@ -318,14 +322,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-
-  // 이 부분 추가 ↓↓↓
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    marginHorizontal: 30,
-    borderRadius: 12,
-    alignItems: 'center',
   },
 });

@@ -3,9 +3,14 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// resolver.assetExts 배열에 'glb'와 'gltf'를 추가합니다.
-// 이 배열에 포함된 확장자들은 Metro가 에셋으로 처리합니다.
+// 일부 older 버전에서는 assetExts가 함수일 수 있으니, 배열로 보장
+config.resolver.assetExts = config.resolver.assetExts || [];
+
+// 'glb'와 'gltf' 파일을 asset으로 처리할 수 있도록 확장자 추가
 config.resolver.assetExts.push('glb', 'gltf');
+
+// 필요 시, 다른 3D 확장자도 여기에 추가 가능 (예: 'bin', 'fbx')
+// config.resolver.assetExts.push('bin', 'fbx');
 
 // 수정된 설정을 내보냅니다.
 module.exports = config;

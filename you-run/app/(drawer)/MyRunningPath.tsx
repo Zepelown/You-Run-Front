@@ -1,41 +1,96 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  FlatList,
+  Alert,
+} from 'react-native';
 import MapView, { Polyline, Marker, Region } from 'react-native-maps';
 import { useNavigation } from '@react-navigation/native';
-import { loadPaths } from '@/storage/RunningStorage';
+import { loadPaths, deletePath, RunningTrack } from '@/storage/RunningStorage';
 
 export default function MyRunningPath() {
-  const [path, setPath] = useState<{ latitude: number; longitude: number }[]>(
-    []
-  );
+  const [tracks, setTracks] = useState<RunningTrack[]>([]);
+  const [selectedTrack, setSelectedTrack] = useState<RunningTrack | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
   const navigation = useNavigation();
 
   useEffect(() => {
-    const fetchPath = async () => {
-      const loadedPaths = await loadPaths();
-      if (loadedPaths.length > 0) {
-        const latestPath = loadedPaths[0];
-        setPath(latestPath);
+    const fetchTracks = async () => {
+      const loadedTracks = await loadPaths();
+      if (loadedTracks.length > 0) {
+        setTracks(loadedTracks);
+        setSelectedTrack(loadedTracks[0]);
         setRegion({
-          latitude: latestPath[0].latitude,
-          longitude: latestPath[0].longitude,
+          latitude: loadedTracks[0].path[0].latitude,
+          longitude: loadedTracks[0].path[0].longitude,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         });
       }
     };
-
-    fetchPath();
+    fetchTracks();
   }, []);
 
-  if (!region) {
+  const handleSelectTrack = (track: RunningTrack) => {
+    setSelectedTrack(track);
+    setRegion({
+      latitude: track.path[0].latitude,
+      longitude: track.path[0].longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    });
+  };
+
+  // 새로 추가하는 삭제 함수
+  const handleDeleteTrack = (id: string) => {
+    Alert.alert(
+      '삭제 확인',
+      '이 기록을 정말 삭제하시겠습니까?',
+      [
+        {
+          text: '취소',
+          style: 'cancel',
+        },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            await deletePath(id);
+            const updatedTracks = tracks.filter((t) => t.id !== id);
+            setTracks(updatedTracks);
+
+            // 삭제한 기록이 현재 선택된 기록일 경우 처리
+            if (selectedTrack?.id === id) {
+              if (updatedTracks.length > 0) {
+                setSelectedTrack(updatedTracks[0]);
+                setRegion({
+                  latitude: updatedTracks[0].path[0].latitude,
+                  longitude: updatedTracks[0].path[0].longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                });
+              } else {
+                setSelectedTrack(null);
+                setRegion(null);
+              }
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  if (tracks.length === 0) {
     return (
       <View style={styles.center}>
-        <Text>저장된 경로를 불러오는 중...</Text>
+        <Text style={styles.noDataText}>아직 저장한 러닝 경로가 없습니다.</Text>
         <Pressable
           style={styles.backButton}
-          onPress={() => navigation.navigate('index')}
+          onPress={() => navigation.navigate('index' as never)}
         >
           <Text style={styles.backButtonText}>메뉴로 돌아가기</Text>
         </Pressable>
@@ -45,21 +100,64 @@ export default function MyRunningPath() {
 
   return (
     <View style={{ flex: 1 }}>
-      <MapView
-        style={{ flex: 1 }}
-        initialRegion={region}
-        showsUserLocation={true}
-      >
-        <Polyline coordinates={path} strokeColor="#007aff" strokeWidth={5} />
-        {path.length > 0 && (
-          <Marker coordinate={path[path.length - 1]}>
-            <View style={styles.marker} />
-          </Marker>
-        )}
-      </MapView>
+      {region && selectedTrack && (
+        <MapView style={{ flex: 1 }} initialRegion={region} region={region}>
+          <Polyline
+            coordinates={selectedTrack.path}
+            strokeColor="#007aff"
+            strokeWidth={5}
+          />
+          {selectedTrack.path.length > 0 && (
+            <Marker
+              coordinate={selectedTrack.path[selectedTrack.path.length - 1]}
+            >
+              <View style={styles.marker} />
+            </Marker>
+          )}
+        </MapView>
+      )}
+
+      {tracks.length > 0 && (
+        <FlatList
+          data={tracks}
+          keyExtractor={(item, index) => item.id ?? index.toString()}
+          horizontal
+          style={styles.trackList}
+          contentContainerStyle={{ paddingHorizontal: 10 }}
+          renderItem={({ item }) => (
+            <View style={{ marginHorizontal: 5, alignItems: 'center' }}>
+              <Pressable
+                style={[
+                  styles.trackItem,
+                  item.id === selectedTrack?.id && styles.trackItemSelected,
+                ]}
+                onPress={() => handleSelectTrack(item)}
+              >
+                <Text style={styles.trackItemText}>
+                  {new Date(item.date).toLocaleDateString()}{' '}
+                  {new Date(item.date).toLocaleTimeString().slice(0, 5)}
+                </Text>
+                {item.distance && item.duration && (
+                  <Text style={styles.trackItemTextSmall}>
+                    {(item.distance / 1000).toFixed(2)}km |{' '}
+                    {Math.floor(item.duration / 60)}분
+                  </Text>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => handleDeleteTrack(item.id!)}
+                style={styles.deleteButton}
+              >
+                <Text style={styles.deleteButtonText}>삭제</Text>
+              </Pressable>
+            </View>
+          )}
+        />
+      )}
+
       <Pressable
         style={styles.backButton}
-        onPress={() => navigation.navigate('index')}
+        onPress={() => navigation.navigate('index' as never)}
       >
         <Text style={styles.backButtonText}>메뉴로 돌아가기</Text>
       </Pressable>
@@ -73,11 +171,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  noDataText: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 20,
+  },
   marker: {
-    width: 10,
-    height: 10,
+    width: 12,
+    height: 12,
     backgroundColor: 'red',
-    borderRadius: 5,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   backButton: {
     position: 'absolute',
@@ -87,10 +192,46 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
+    zIndex: 10,
   },
   backButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  trackList: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+  },
+  trackItem: {
+    backgroundColor: '#ddd',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  trackItemSelected: {
+    backgroundColor: '#007aff',
+  },
+  trackItemText: {
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  trackItemTextSmall: {
+    color: '#333',
+    fontSize: 12,
+  },
+  deleteButton: {
+    marginTop: 4,
+    backgroundColor: '#ff3b30',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
   },
 });

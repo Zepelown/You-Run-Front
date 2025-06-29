@@ -14,12 +14,12 @@
         "NSLocationWhenInUseUsageDescription": "앱 사용 중에 현재 위치를 파악하기 위해 위치 정보가 필요합니다.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "백그라운드에서도 위치를 추적하여 서비스를 제공하기 위해 항상 위치 정보가 필요합니다.",
         "NSLocationAlwaysUsageDescription": "백그라운드에서도 위치 기반 서비스를 제공하기 위해 위치 정보가 필요합니다.",
-        "UIBackgroundModes": [ 
-          "location",
-          "fetch"
-        ]
-      }
+        "UIBackgroundModes": ["location", "fetch", "location", "fetch"],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.xlouisjungx.yourun"
     },
+    "assetBundlePatterns": ["assets/**/*"],
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -30,7 +30,8 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.ACCESS_BACKGROUND_LOCATION" 
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -60,6 +61,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c20ef950-9784-4656-9eaf-63036139c29e"
+      }
     }
   }
 }
